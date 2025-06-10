@@ -25,13 +25,13 @@ Envie um ficheiro Excel para o endpoint `/import` usando ferramentas como cURL o
 curl -F file=@dados.xlsx http://localhost:3001/import
 ```
 
-Acesse `/export` para baixar os dados em Excel.
+Acesse `/export` para baixar os dados em Excel ou `/export/csv` para CSV.
 
 ### Filtrar resultados
 
 Você pode passar parâmetros de query para `/projects` a fim de filtrar por
-província, gestor ou objecto, por exemplo:
+província, gestor, objecto ou estado, por exemplo:
 
 ```bash
-curl "http://localhost:3001/projects?provincia=Maputo&gestor=Ana"
+curl "http://localhost:3001/projects?provincia=Maputo&gestor=Ana&estado=Em%20curso"
 ```

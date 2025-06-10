@@ -31,11 +31,12 @@ O endpoint `/projects` aceita parametros de query para filtrar os resultados:
 - `provincia`
 - `gestor`
 - `objecto`
+- `estado`
 
 Exemplo:
 
 ```bash
-curl "http://localhost:3001/projects?provincia=Maputo&gestor=Ana"
+curl "http://localhost:3001/projects?provincia=Maputo&gestor=Ana&estado=Concluido"
 ```
 
 ## Importacao
@@ -44,4 +45,4 @@ Envie um `multipart/form-data` com o campo `file` para `/import` contendo um fic
 
 ## Exportacao
 
-Acesse `/export` para baixar o ficheiro `projects.xlsx` com os dados.
+Acesse `/export` para baixar o ficheiro `projects.xlsx` ou `/export/csv` para `projects.csv` com os dados.
