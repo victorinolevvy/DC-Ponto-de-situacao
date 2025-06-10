@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ponto de Situação DCF</title>
+  <script crossorigin src="https://unpkg.com/react@17/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
+  <script crossorigin src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border: 1px solid #ccc; padding: 8px; }
+    th { background-color: #eee; }
+    input, select, textarea { width: 100%; padding: 4px; }
+    .form-container { max-width: 600px; margin-bottom: 20px; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const api = 'http://localhost:3001';
+
+    function ProjectForm({ onSaved, project }) {
+      const [form, setForm] = React.useState(project || {
+        provincia: '', pesoe: '', pa: '', objecto: '', empresa_contratada: '',
+        valor_contrato: '', data_inicio: '', valor_pago: '', valor_falta: '',
+        fis: '', fin: '', previsao_termino: '', ponto_situacao: '',
+        gestor: '', desvio: ''
+      });
+
+      function handleChange(e) {
+        setForm({ ...form, [e.target.name]: e.target.value });
+      }
+
+      function handleSubmit(e) {
+        e.preventDefault();
+        const method = form.id ? 'PUT' : 'POST';
+        const url = form.id ? `${api}/projects/${form.id}` : `${api}/projects`;
+        fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(form)
+        }).then(() => onSaved());
+      }
+
+      return (
+        <form className="form-container" onSubmit={handleSubmit}>
+          {Object.keys(form).map(key => (
+            key === 'id' ? null : (
+              <div key={key}>
+                <label>{key}:</label>
+                <input name={key} value={form[key]} onChange={handleChange} />
+              </div>
+            )
+          ))}
+          <button type="submit">Guardar</button>
+        </form>
+      );
+    }
+
+    function App() {
+      const [projects, setProjects] = React.useState([]);
+      const [editing, setEditing] = React.useState(null);
+      const [filters, setFilters] = React.useState({ provincia: '', gestor: '', objecto: '' });
+
+      function load() {
+        const params = new URLSearchParams();
+        if (filters.provincia) params.append('provincia', filters.provincia);
+        if (filters.gestor) params.append('gestor', filters.gestor);
+        if (filters.objecto) params.append('objecto', filters.objecto);
+        fetch(`${api}/projects?${params.toString()}`)
+          .then(r => r.json())
+          .then(setProjects);
+      }
+
+      function handleFilterChange(e) {
+        setFilters({ ...filters, [e.target.name]: e.target.value });
+      }
+
+      React.useEffect(load, []);
+
+      return (
+        <div>
+          <h1>Ponto de Situação DCF</h1>
+          <div>
+            <input name="provincia" placeholder="Província" value={filters.provincia} onChange={handleFilterChange} />
+            <input name="gestor" placeholder="Gestor" value={filters.gestor} onChange={handleFilterChange} />
+            <input name="objecto" placeholder="Objecto" value={filters.objecto} onChange={handleFilterChange} />
+            <button onClick={load}>Filtrar</button>
+            <button onClick={() => { setFilters({ provincia:'', gestor:'', objecto:'' }); load(); }}>Limpar</button>
+          </div>
+          <button onClick={() => window.location = `${api}/export`}>Exportar</button>
+          <ProjectForm onSaved={() => { setEditing(null); load(); }} project={editing} />
+          <table>
+            <thead>
+              <tr>
+                {projects[0] && Object.keys(projects[0]).map(k => <th key={k}>{k}</th>)}
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {projects.map(p => (
+                <tr key={p.id}>
+                  {Object.keys(p).map(k => <td key={k}>{p[k]}</td>)}
+                  <td>
+                    <button onClick={() => setEditing(p)}>Editar</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+    }
+
+    ReactDOM.render(<App />, document.getElementById('root'));
+  </script>
+</body>
+</html>
