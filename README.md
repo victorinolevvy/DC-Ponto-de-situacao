@@ -9,10 +9,10 @@ Aplicação simples para registo e actualização do ponto de situação dos pro
 
 ## Como executar
 
-1. Entre na pasta `backend` e instale as dependências:
+1. Entre na pasta `backend` e instale as dependências e inicie o servidor:
    ```bash
    npm install
-   node server.js
+   npm start
    ```
    O servidor ficará disponível em `http://localhost:3001`.
 
