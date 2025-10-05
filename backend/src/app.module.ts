@@ -12,6 +12,7 @@ import { ContratosModule } from './contratos/contratos.module';
 import { MarcosModule } from './marcos/marcos.module';
 import { RolesGuard } from './common/guards/roles.guard';
 import { RelatoriosModule } from './relatorios/relatorios.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { RelatoriosModule } from './relatorios/relatorios.module';
     ContratosModule,
     MarcosModule,
     RelatoriosModule,
+    DashboardModule,
   ],
   providers: [
     {

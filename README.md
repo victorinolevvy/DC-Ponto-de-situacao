@@ -7,7 +7,7 @@ Monorepositório para o MVP de reporte quinzenal dos projectos de electrificaç�
 ```
 .
 ├── backend/   # API NestJS + Prisma + PostgreSQL
-├── frontend/  # (placeholder) SPA React/TypeScript – a desenvolver nas próximas iterações
+├── frontend/  # SPA React/TypeScript (Vite + Tailwind) para o dashboard consolidado
 └── docker-compose.yml  # Postgres local para desenvolvimento
 ```
 
@@ -22,6 +22,14 @@ Monorepositório para o MVP de reporte quinzenal dos projectos de electrificaç�
 - Testes básicos de contrato (Supertest)
 
 > Consulte o [README do backend](backend/README.md) para instruções detalhadas de configuração, scripts e endpoints.
+
+## Iteração 5 – Dashboard consolidado (Entregue)
+
+- Endpoint `/dashboard/overview` com KPIs, tabela paginada/ordenável e partilha da lógica de semáforo definitivo.
+- Exportação para Excel e PDF gerada no backend reutilizando os filtros aplicados.
+- Frontend em React (Vite) com mapa Leaflet, tabela filtrável e gestão de token JWT.
+
+> Consulte o [README do frontend](frontend/README.md) para execução local e variáveis `VITE_`.
 
 ## Como executar rapidamente o backend
 
@@ -46,11 +54,21 @@ Credenciais seed:
 - `director@demo` / `Senha123!`
 - `gestor@demo` / `Senha123!`
 
+## Como executar rapidamente o frontend
+
+```bash
+cd frontend
+npm install
+cp .env.example .env  # ajustar VITE_API_URL caso necessário
+npm run dev
+```
+
+Aplicação disponível em `http://localhost:5173`.
+
 ## Próximos Passos
 
-1. Iteração 2 – CRUD de localização no frontend e operações de projectos
-2. Iteração 3 – Contratos e marcos
-3. Iteração 4 – Relatórios quinzenais e histórico
+1. Iteração 6 – Exportações enriquecidas e polimento UI/UX
+2. Iteração 7 – Hardening (testes adicionais, acessibilidade, performance)
 
 ## Licença
 

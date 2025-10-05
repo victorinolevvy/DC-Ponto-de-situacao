@@ -1,3 +1,7 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
+/* eslint-disable @typescript-eslint/unbound-method */
 import {
   INestApplication,
   ClassSerializerInterceptor,
@@ -5,7 +9,7 @@ import {
   CanActivate,
   ExecutionContext,
 } from '@nestjs/common';
-/* eslint-disable @typescript-eslint/unbound-method */
+
 import { Perfil } from '@prisma/client';
 import { Reflector } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
@@ -37,6 +41,7 @@ describe('AppController (e2e)', () => {
     },
     projeto: {
       findUnique: jest.fn(),
+      findMany: jest.fn(),
     },
     contrato: {
       create: jest.fn(),
@@ -121,6 +126,7 @@ describe('AppController (e2e)', () => {
     projetoFindUniqueMock.mockResolvedValue({
       id: 1,
     });
+    (prismaMock.projeto.findMany as jest.Mock).mockResolvedValue([]);
     (prismaMock.contrato.findUnique as jest.Mock).mockResolvedValue({
       id: 1,
       projetoId: 1,
@@ -799,6 +805,389 @@ describe('AppController (e2e)', () => {
         execFisicaPct: 5,
         execFinanceiraPct: 4,
       });
+    });
+  });
+
+  describe('Dashboard overview', () => {
+    it('/dashboard/overview (GET) aplica filtros e retorna lista paginada', async () => {
+      const now = new Date('2024-03-30T00:00:00.000Z');
+      (prismaMock.projeto.findMany as jest.Mock).mockResolvedValueOnce([
+        {
+          id: 1,
+          nome: 'Divinhe - FV',
+          provinciaId: 1,
+          provincia: { id: 1, nome: 'Maputo' },
+          tipoProjeto: 'FV',
+          estado: 'EmCurso',
+          latitude: -26.4621,
+          longitude: 32.1723,
+          valorGlobalMT: 120_000_000,
+          chaveNaMao: true,
+          createdAt: now,
+          updatedAt: now,
+          contratos: [
+            {
+              id: 10,
+              valorContratoMT: 45_000_000,
+              dataPrevistaFim: new Date('2024-12-31T00:00:00.000Z'),
+              createdAt: now,
+              updatedAt: now,
+            },
+          ],
+        },
+      ]);
+
+      const relatorioFindManyMock = prismaMock.relatorioQuinzenal
+        .findMany as jest.Mock;
+      relatorioFindManyMock
+        .mockResolvedValueOnce([
+          {
+            id: 100,
+            projetoId: 1,
+            contratoId: null,
+            dataRef: new Date('2024-03-30T00:00:00.000Z'),
+            execFisicaPct: '44.80',
+            execFinanceiraPct: '46.10',
+            prazo: 'NO_PRAZO',
+            risco: 'Observado atraso na entrega de cabos.',
+            mitigacao: 'Gestão com fornecedor.',
+            autorUserId: 1,
+            createdAt: now,
+            updatedAt: now,
+            deletedAt: null,
+          },
+        ])
+        .mockResolvedValueOnce([]);
+
+      const server = app.getHttpServer() as Parameters<typeof request>[0];
+      const response: Response = await request(server)
+        .get(
+          '/dashboard/overview?provinciaId=1&page=1&pageSize=5&sortBy=nome&sortOrder=asc',
+        )
+        .expect(200);
+
+      expect(prismaMock.projeto.findMany).toHaveBeenCalledWith({
+        where: { provinciaId: 1 },
+        include: { provincia: true, contratos: true },
+        orderBy: { id: 'asc' },
+      });
+
+      const body = response.body as {
+        success: boolean;
+        data: {
+          kpis: { totalEmCurso: number };
+          lista: {
+            items: Array<{ statusSemaforo: string }>;
+            meta: Record<string, number>;
+          };
+        };
+      };
+
+      expect(body.success).toBe(true);
+      expect(body.data.kpis.totalEmCurso).toBe(1);
+      expect(body.data.lista.items).toHaveLength(1);
+      expect(body.data.lista.items[0].statusSemaforo).toBe('amarelo');
+      expect(body.data.lista.meta).toEqual(
+        expect.objectContaining({
+          total: 1,
+          page: 1,
+          pageSize: 5,
+          totalPages: 1,
+        }),
+      );
+    });
+
+    it('/dashboard/overview (GET) calcula KPIs e semáforos definitivos', async () => {
+      const now = new Date('2024-03-31T00:00:00.000Z');
+      (prismaMock.projeto.findMany as jest.Mock).mockResolvedValueOnce([
+        {
+          id: 1,
+          nome: 'Divinhe - FV',
+          provinciaId: 1,
+          provincia: { id: 1, nome: 'Maputo' },
+          tipoProjeto: 'FV',
+          estado: 'EmCurso',
+          latitude: -26.4621,
+          longitude: 32.1723,
+          valorGlobalMT: 120_000_000,
+          chaveNaMao: true,
+          createdAt: new Date('2024-02-01T00:00:00.000Z'),
+          updatedAt: new Date('2024-03-29T00:00:00.000Z'),
+          contratos: [
+            {
+              id: 10,
+              valorContratoMT: 45_000_000,
+              dataPrevistaFim: new Date('2024-12-31T00:00:00.000Z'),
+              createdAt: now,
+              updatedAt: now,
+            },
+          ],
+        },
+        {
+          id: 2,
+          nome: 'Tomé - FV + Rede',
+          provinciaId: 2,
+          provincia: { id: 2, nome: 'Sofala' },
+          tipoProjeto: 'FV',
+          estado: 'Parado',
+          latitude: -19.8012,
+          longitude: 34.8385,
+          valorGlobalMT: 132_000_000,
+          chaveNaMao: false,
+          createdAt: new Date('2023-10-01T00:00:00.000Z'),
+          updatedAt: new Date('2024-04-01T00:00:00.000Z'),
+          contratos: [
+            {
+              id: 20,
+              valorContratoMT: 28_000_000,
+              dataPrevistaFim: new Date('2024-09-30T00:00:00.000Z'),
+              createdAt: now,
+              updatedAt: now,
+            },
+          ],
+        },
+      ]);
+
+      const relatorioFindManyMock = prismaMock.relatorioQuinzenal
+        .findMany as jest.Mock;
+      relatorioFindManyMock
+        .mockResolvedValueOnce([
+          {
+            id: 201,
+            projetoId: 1,
+            contratoId: null,
+            dataRef: new Date('2024-03-28T00:00:00.000Z'),
+            execFisicaPct: '50.00',
+            execFinanceiraPct: '52.00',
+            prazo: 'NO_PRAZO',
+            risco: '',
+            mitigacao: null,
+            autorUserId: 1,
+            createdAt: now,
+            updatedAt: now,
+            deletedAt: null,
+          },
+          {
+            id: 202,
+            projetoId: 2,
+            contratoId: null,
+            dataRef: new Date('2024-04-01T00:00:00.000Z'),
+            execFisicaPct: '65.00',
+            execFinanceiraPct: '80.00',
+            prazo: 'ATRASADO',
+            risco: 'Bloqueio logístico em porto.',
+            mitigacao: 'Reforço de equipas de descarga.',
+            autorUserId: 1,
+            createdAt: now,
+            updatedAt: now,
+            deletedAt: null,
+          },
+        ])
+        .mockResolvedValueOnce([
+          {
+            id: 301,
+            projetoId: 1,
+            contratoId: 10,
+            dataRef: new Date('2024-03-20T00:00:00.000Z'),
+            execFisicaPct: '48.00',
+            execFinanceiraPct: '50.00',
+            prazo: 'NO_PRAZO',
+            risco: '',
+            mitigacao: null,
+            autorUserId: 1,
+            createdAt: now,
+            updatedAt: now,
+            deletedAt: null,
+          },
+          {
+            id: 302,
+            projetoId: 2,
+            contratoId: 20,
+            dataRef: new Date('2024-03-25T00:00:00.000Z'),
+            execFisicaPct: '60.00',
+            execFinanceiraPct: '75.00',
+            prazo: 'ATRASADO',
+            risco: 'Falha crítica nos transformadores.',
+            mitigacao: 'Fornecedor mobilizado.',
+            autorUserId: 1,
+            createdAt: now,
+            updatedAt: now,
+            deletedAt: null,
+          },
+        ]);
+
+      const server = app.getHttpServer() as Parameters<typeof request>[0];
+      const response: Response = await request(server)
+        .get('/dashboard/overview')
+        .expect(200);
+
+      const body = response.body as {
+        success: boolean;
+        data: {
+          kpis: {
+            totalEmCurso: number;
+            totalParado: number;
+            valorTotalInvestimentoMT: number;
+            mediaExecucaoFisica: number | null;
+            riscosAtivos: number;
+          };
+          lista: {
+            items: Array<{
+              id: number;
+              statusSemaforo: string;
+              motivosSemaforo: string[];
+            }>;
+            meta: { total: number };
+          };
+        };
+      };
+
+      expect(body.success).toBe(true);
+      expect(body.data.kpis.totalEmCurso).toBe(1);
+      expect(body.data.kpis.totalParado).toBe(1);
+      expect(body.data.kpis.valorTotalInvestimentoMT).toBe(252_000_000);
+      expect(body.data.kpis.mediaExecucaoFisica).toBe(57.5);
+      expect(body.data.kpis.riscosAtivos).toBe(1);
+      expect(body.data.lista.meta.total).toBe(2);
+      expect(body.data.lista.items[0].statusSemaforo).toBe('vermelho');
+      expect(body.data.lista.items[0].motivosSemaforo).toEqual(
+        expect.arrayContaining([
+          'prazo_atrasado_projeto',
+          'risco_critico_texto',
+        ]),
+      );
+    });
+
+    it('/dashboard/overview/export (GET) gera ficheiro Excel', async () => {
+      const now = new Date('2024-03-20T00:00:00.000Z');
+      (prismaMock.projeto.findMany as jest.Mock).mockResolvedValueOnce([
+        {
+          id: 1,
+          nome: 'Divinhe - FV',
+          provinciaId: 1,
+          provincia: { id: 1, nome: 'Maputo' },
+          tipoProjeto: 'FV',
+          estado: 'EmCurso',
+          latitude: -26.4621,
+          longitude: 32.1723,
+          valorGlobalMT: 120_000_000,
+          chaveNaMao: true,
+          createdAt: now,
+          updatedAt: now,
+          contratos: [
+            {
+              id: 10,
+              valorContratoMT: 45_000_000,
+              dataPrevistaFim: new Date('2024-12-31T00:00:00.000Z'),
+              createdAt: now,
+              updatedAt: now,
+            },
+          ],
+        },
+      ]);
+
+      const relatorioFindManyMock = prismaMock.relatorioQuinzenal
+        .findMany as jest.Mock;
+      relatorioFindManyMock
+        .mockResolvedValueOnce([
+          {
+            id: 401,
+            projetoId: 1,
+            contratoId: null,
+            dataRef: new Date('2024-03-18T00:00:00.000Z'),
+            execFisicaPct: '55.00',
+            execFinanceiraPct: '57.00',
+            prazo: 'NO_PRAZO',
+            risco: '',
+            mitigacao: '',
+            autorUserId: 1,
+            createdAt: now,
+            updatedAt: now,
+            deletedAt: null,
+          },
+        ])
+        .mockResolvedValueOnce([]);
+
+      const server = app.getHttpServer() as Parameters<typeof request>[0];
+      const response: Response = await request(server)
+        .get('/dashboard/overview/export?format=xlsx')
+        .buffer(true)
+        .parse((res, callback) => {
+          const chunks: Buffer[] = [];
+          res.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+          res.on('end', () => callback(null, Buffer.concat(chunks)));
+        })
+        .expect(200);
+
+      expect(response.headers['content-type']).toContain(
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
+      expect(response.body.length).toBeGreaterThan(0);
+    });
+
+    it('/dashboard/overview/export (GET) gera ficheiro PDF', async () => {
+      const now = new Date('2024-03-22T00:00:00.000Z');
+      (prismaMock.projeto.findMany as jest.Mock).mockResolvedValueOnce([
+        {
+          id: 2,
+          nome: 'Tomé - FV + Rede',
+          provinciaId: 2,
+          provincia: { id: 2, nome: 'Sofala' },
+          tipoProjeto: 'FV',
+          estado: 'Parado',
+          latitude: -19.8012,
+          longitude: 34.8385,
+          valorGlobalMT: 132_000_000,
+          chaveNaMao: false,
+          createdAt: now,
+          updatedAt: now,
+          contratos: [
+            {
+              id: 20,
+              valorContratoMT: 28_000_000,
+              dataPrevistaFim: new Date('2024-09-30T00:00:00.000Z'),
+              createdAt: now,
+              updatedAt: now,
+            },
+          ],
+        },
+      ]);
+
+      const relatorioFindManyMock = prismaMock.relatorioQuinzenal
+        .findMany as jest.Mock;
+      relatorioFindManyMock
+        .mockResolvedValueOnce([
+          {
+            id: 501,
+            projetoId: 2,
+            contratoId: null,
+            dataRef: new Date('2024-03-21T00:00:00.000Z'),
+            execFisicaPct: '70.00',
+            execFinanceiraPct: '72.00',
+            prazo: 'NO_PRAZO',
+            risco: '',
+            mitigacao: '',
+            autorUserId: 1,
+            createdAt: now,
+            updatedAt: now,
+            deletedAt: null,
+          },
+        ])
+        .mockResolvedValueOnce([]);
+
+      const server = app.getHttpServer() as Parameters<typeof request>[0];
+      const response: Response = await request(server)
+        .get('/dashboard/overview/export?format=pdf')
+        .buffer(true)
+        .parse((res, callback) => {
+          const chunks: Buffer[] = [];
+          res.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+          res.on('end', () => callback(null, Buffer.concat(chunks)));
+        })
+        .expect(200);
+
+      expect(response.headers['content-type']).toContain('application/pdf');
+      expect(response.body.length).toBeGreaterThan(0);
     });
   });
 });

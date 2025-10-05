@@ -56,7 +56,7 @@ O seed cria três contas:
 - `POST /auth/login` devolve um `accessToken` JWT e os metadados do utilizador.
 - `POST /auth/register` exige perfil `Admin` e cria novos utilizadores.
 
-## Endpoints principais (Iteração 4)
+## Endpoints principais (Iteração 5)
 
 - `GET /provincias`, `POST /provincias`, `PATCH /provincias/:id`, `DELETE /provincias/:id`
 - `GET /distritos?provinciaId=`, `POST /distritos`, `PATCH /distritos/:id`, `DELETE /distritos/:id`
@@ -69,10 +69,19 @@ O seed cria três contas:
 - `GET /projetos/:id/contratos`, `POST /projetos/:id/contratos`, `PATCH /contratos/:id`
 - `GET /projetos/:id/marcos`, `POST /projetos/:id/marcos`
 - `POST /auth/login`, `POST /auth/register`, `GET /auth/profile`
+- `GET /dashboard/overview` – devolve KPIs globais e lista consolidada de projectos com filtros/paginação.
+- `GET /dashboard/overview/export?format=xlsx|pdf` – gera ficheiro com os mesmos filtros aplicados na listagem.
 
 Todas as respostas seguem o formato `{ success: boolean, data?: any, error?: { message, statusCode } }`.
 
 A documentação interactiva está disponível em `/docs` (Swagger) depois de iniciar a aplicação.
+
+## Dashboard consolidado e exportações
+
+- Os KPIs incluídos são: nº de projectos em curso/concluídos/parados, investimento total (somatório `valorGlobalMT`), média de execução física dos últimos relatórios e nº de riscos activos (texto preenchido).
+- A lista consolidada inclui: identificação, localização, tipo, percentagens de execução, estado de prazo, valor total dos contratos, semáforo definitivo com motivos e última actualização.
+- Filtros suportados: `provinciaId`, `tipoProjeto`, `estado` + ordenação (`sortBy`, `sortOrder`) e paginação (`page`, `pageSize`).
+- As exportações replicam exactamente os filtros seleccionados e estão disponíveis em Excel (`.xlsx`) e PDF.
 
 ## Qualidade
 

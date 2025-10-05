@@ -281,6 +281,56 @@ async function main() {
       include: { contratos: true },
     });
 
+    const fornecimento = await prisma.projeto.create({
+      data: {
+        nome: 'Fornecimento Cabos - Transversal',
+        tipoProjeto: TipoProjeto.Outro,
+        provinciaId: maputo.id,
+        distritoId: boane.id,
+        postoAdmId: postoByNome['Boane Sede'].id,
+        chaveNaMao: true,
+        latitude: new Prisma.Decimal(-25.9651),
+        longitude: new Prisma.Decimal(32.4797),
+        estado: EstadoProjeto.Concluido,
+        valorGlobalMT: new Prisma.Decimal(65000000),
+        contratos: {
+          create: [
+            {
+              tipoContrato: TipoContrato.Fornecimento,
+              empresa: 'Global Cabos SA',
+              valorContratoMT: new Prisma.Decimal(40000000),
+              dataInicio: new Date('2023-06-01'),
+              dataPrevistaFim: new Date('2023-12-15'),
+              chaveNaMao: true,
+            },
+            {
+              tipoContrato: TipoContrato.Fiscalizacao,
+              empresa: 'AuditPower',
+              valorContratoMT: new Prisma.Decimal(6000000),
+              dataInicio: new Date('2023-06-15'),
+              dataPrevistaFim: new Date('2023-12-31'),
+              chaveNaMao: false,
+            },
+          ],
+        },
+        marcos: {
+          create: [
+            {
+              tipo: TipoMarco.AutoInicio,
+              data: new Date('2023-06-20'),
+              nota: 'Logística estabelecida para entregas faseadas.',
+            },
+            {
+              tipo: TipoMarco.Fecho,
+              data: new Date('2023-12-18'),
+              nota: 'Entrega final validada pela fiscalização.',
+            },
+          ],
+        },
+      },
+      include: { contratos: true },
+    });
+
     if (gestor) {
       const contratosDivinhe = Object.fromEntries(
         divinhe.contratos.map((contrato) => [contrato.tipoContrato, contrato.id]),
@@ -433,6 +483,47 @@ async function main() {
             prazo: PrazoStatus.ATRASADO,
             risco: 'Projeto parado aguardando garantia bancária.',
             mitigacao: 'Reunião com banco marcada.',
+            autorUserId: gestor.id,
+          },
+        ],
+      });
+
+      const contratosFornecimento = Object.fromEntries(
+        fornecimento.contratos.map((contrato) => [contrato.tipoContrato, contrato.id]),
+      );
+      await prisma.relatorioQuinzenal.createMany({
+        data: [
+          {
+            projetoId: fornecimento.id,
+            contratoId: null,
+            dataRef: new Date('2023-10-15'),
+            execFisicaPct: 82.0,
+            execFinanceiraPct: 84.0,
+            prazo: PrazoStatus.NO_PRAZO,
+            risco: 'Risco residual de transporte mitigado com stock local.',
+            mitigacao: 'Armazém temporário instalado em Boane.',
+            autorUserId: gestor.id,
+          },
+          {
+            projetoId: fornecimento.id,
+            contratoId: contratosFornecimento[TipoContrato.Fornecimento],
+            dataRef: new Date('2023-11-15'),
+            execFisicaPct: 95.0,
+            execFinanceiraPct: 94.0,
+            prazo: PrazoStatus.NO_PRAZO,
+            risco: '',
+            mitigacao: '',
+            autorUserId: gestor.id,
+          },
+          {
+            projetoId: fornecimento.id,
+            contratoId: null,
+            dataRef: new Date('2023-12-20'),
+            execFisicaPct: 100.0,
+            execFinanceiraPct: 99.0,
+            prazo: PrazoStatus.CONCLUIDO,
+            risco: null,
+            mitigacao: null,
             autorUserId: gestor.id,
           },
         ],
