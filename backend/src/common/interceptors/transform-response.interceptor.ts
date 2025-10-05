@@ -19,7 +19,7 @@ export class TransformResponseInterceptor implements NestInterceptor {
   intercept(
     _context: ExecutionContext,
     next: CallHandler,
-  ): Observable<ApiResponse> {
+  ): Observable<ApiResponse | StreamableFile> {
     return next.handle().pipe(
       map((data: unknown): ApiResponse | StreamableFile => {
         if (data instanceof StreamableFile) {

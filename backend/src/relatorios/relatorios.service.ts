@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Perfil, PrazoStatus, Prisma } from '@prisma/client';
+import type { RelatorioQuinzenal } from '@prisma/client';
 import { PinoLogger } from 'nestjs-pino';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateRelatorioDto } from './dto/create-relatorio.dto';
@@ -21,7 +22,7 @@ interface CurrentUser {
   perfil: Perfil;
 }
 
-interface ListResult<T> {
+export interface ListResult<T> {
   items: T[];
   meta: {
     total: number;
@@ -87,7 +88,7 @@ export class RelatoriosService {
     projetoId: number,
     query: ListRelatorioQueryDto,
     user: CurrentUser,
-  ): Promise<ListResult<unknown>> {
+  ): Promise<ListResult<RelatorioQuinzenal>> {
     await this.ensureProjetoExiste(projetoId);
     const where: Prisma.RelatorioQuinzenalWhereInput = {
       projetoId,

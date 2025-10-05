@@ -124,8 +124,8 @@ async function main() {
         distritoId: matutuine.id,
         postoAdmId: postoByNome['Salamanga'].id,
         chaveNaMao: true,
-        latitude: new Prisma.Decimal(-26.4621),
-        longitude: new Prisma.Decimal(32.1723),
+        latitude: -26.4621,
+        longitude: 32.1723,
         estado: EstadoProjeto.EmCurso,
         valorGlobalMT: new Prisma.Decimal(120000000),
         contratos: {
@@ -179,8 +179,8 @@ async function main() {
         distritoId: xaixai.id,
         postoAdmId: postoByNome['Chongoene'].id,
         chaveNaMao: false,
-        latitude: new Prisma.Decimal(-24.7091),
-        longitude: new Prisma.Decimal(33.5342),
+        latitude: -24.7091,
+        longitude: 33.5342,
         estado: EstadoProjeto.EmCurso,
         valorGlobalMT: new Prisma.Decimal(85000000),
         contratos: {
@@ -234,8 +234,8 @@ async function main() {
         distritoId: beira.id,
         postoAdmId: postoByNome['Inhamizua'].id,
         chaveNaMao: false,
-        latitude: new Prisma.Decimal(-19.8012),
-        longitude: new Prisma.Decimal(34.8385),
+        latitude: -19.8012,
+        longitude: 34.8385,
         estado: EstadoProjeto.Parado,
         valorGlobalMT: new Prisma.Decimal(132000000),
         contratos: {
@@ -289,8 +289,8 @@ async function main() {
         distritoId: boane.id,
         postoAdmId: postoByNome['Boane Sede'].id,
         chaveNaMao: true,
-        latitude: new Prisma.Decimal(-25.9651),
-        longitude: new Prisma.Decimal(32.4797),
+        latitude: -25.9651,
+        longitude: 32.4797,
         estado: EstadoProjeto.Concluido,
         valorGlobalMT: new Prisma.Decimal(65000000),
         contratos: {

@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { MouseEvent, useEffect, useMemo, useState } from 'react';
 import { MapContainer, Marker, Popup, TileLayer } from 'react-leaflet';
 import L from 'leaflet';
 import { clsx } from 'clsx';
 import 'leaflet/dist/leaflet.css';
 
-const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
+const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api';
 
 const tipoProjetoOptions = [
   { value: '', label: 'Todos os tipos' },
@@ -79,8 +79,25 @@ interface ProjectListItem {
   valorGlobalMT: number | null;
   statusSemaforo: SemaforoStatus;
   motivosSemaforo: string[];
+  riscoCompleto: string | null;
   riscoCurto: string | null;
   ultimaAtualizacao: string;
+}
+
+interface ProjetoResumoResponse {
+  success: boolean;
+  data: {
+    totalContratos: number;
+    valorTotalContratoMT: number;
+    proximasDatasChave: Array<{
+      id: number;
+      tipo: string;
+      data: string;
+      nota?: string;
+    }>;
+    statusSemaforo: SemaforoStatus;
+    motivosSemaforo: string[];
+  };
 }
 
 interface DashboardResponse {
@@ -187,6 +204,11 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [provincias, setProvincias] = useState<Provincia[]>([]);
   const [isFetchingProvincias, setIsFetchingProvincias] = useState(false);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [isDetailLoading, setIsDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const [detailProject, setDetailProject] = useState<ProjectListItem | null>(null);
+  const [detailResumo, setDetailResumo] = useState<ProjetoResumoResponse['data'] | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -263,6 +285,14 @@ function App() {
     }));
   };
 
+  const handleEstadoToggle = (estado: FiltersState['estado']) => {
+    setFilters((prev) => ({
+      ...prev,
+      estado: prev.estado === estado ? '' : estado,
+      page: 1,
+    }));
+  };
+
   const handleSort = (field: SortableField) => {
     setFilters((prev) => {
       if (prev.sortBy === field) {
@@ -294,6 +324,46 @@ function App() {
     localStorage.removeItem('accessToken');
     setTokenDraft('');
     setToken('');
+  };
+
+  const openProjectDetail = async (project: ProjectListItem) => {
+    setDetailProject(project);
+    setDetailResumo(null);
+    setDetailError(null);
+    setIsDetailOpen(true);
+    setIsDetailLoading(true);
+    try {
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+      const res = await fetch(`${API_BASE}/projetos/${project.id}/resumo`, {
+        headers,
+      });
+      if (!res.ok) {
+        throw new Error(
+          res.status === 401
+            ? 'Não autenticado. Faça login para ver detalhes.'
+            : 'Não foi possível carregar o resumo do projecto.',
+        );
+      }
+      const payload = (await res.json()) as ProjetoResumoResponse;
+      if (!payload.success) {
+        throw new Error('Resposta inesperada ao obter resumo.');
+      }
+      setDetailResumo(payload.data);
+    } catch (err) {
+      setDetailError((err as Error).message);
+    } finally {
+      setIsDetailLoading(false);
+    }
+  };
+
+  const closeDetail = () => {
+    setIsDetailOpen(false);
+    setDetailResumo(null);
+    setDetailProject(null);
+    setDetailError(null);
   };
 
   const exportData = async (format: 'xlsx' | 'pdf') => {
@@ -358,7 +428,8 @@ function App() {
   const isEmpty = !isLoading && items.length === 0;
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <>
+      <div className="min-h-screen bg-slate-50">
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         <header className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
@@ -399,11 +470,32 @@ function App() {
           </div>
         </header>
 
-        <section className="mb-6 grid gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <section
+          className="mb-6 grid gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+          data-testid="dashboard-kpis"
+        >
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <KpiCard label="Projectos em curso" value={data?.kpis.totalEmCurso ?? 0} accent="emerald" />
-            <KpiCard label="Projectos concluídos" value={data?.kpis.totalConcluido ?? 0} accent="cyan" />
-            <KpiCard label="Projectos parados" value={data?.kpis.totalParado ?? 0} accent="rose" />
+            <KpiCard
+              label="Projectos em curso"
+              value={data?.kpis.totalEmCurso ?? 0}
+              accent="emerald"
+              onClick={() => handleEstadoToggle('EmCurso')}
+              isActive={filters.estado === 'EmCurso'}
+            />
+            <KpiCard
+              label="Projectos concluídos"
+              value={data?.kpis.totalConcluido ?? 0}
+              accent="cyan"
+              onClick={() => handleEstadoToggle('Concluido')}
+              isActive={filters.estado === 'Concluido'}
+            />
+            <KpiCard
+              label="Projectos parados"
+              value={data?.kpis.totalParado ?? 0}
+              accent="rose"
+              onClick={() => handleEstadoToggle('Parado')}
+              isActive={filters.estado === 'Parado'}
+            />
             <KpiCard label="Riscos activos" value={data?.kpis.riscosAtivos ?? 0} accent="amber" />
             <KpiCard
               label="Investimento total"
@@ -580,7 +672,19 @@ function App() {
                 <tbody className="divide-y divide-slate-100">
                   {items.map((item) => (
                     <tr key={item.id} className="hover:bg-slate-50">
-                      <td className="px-3 py-3 font-medium text-slate-900">{item.nome}</td>
+                      <td className="px-3 py-3">
+                        <div className="flex flex-col gap-1">
+                          <span className="font-medium text-slate-900">{item.nome}</span>
+                          <button
+                            type="button"
+                            data-testid="project-detail-button"
+                            onClick={() => openProjectDetail(item)}
+                            className="w-fit text-xs font-medium text-brand-600 transition hover:text-brand-500"
+                          >
+                            Ver detalhe
+                          </button>
+                        </div>
+                      </td>
                       <td className="px-3 py-3 text-slate-600">{item.provincia ?? '—'}</td>
                       <td className="px-3 py-3 text-slate-600">{item.tipoProjeto}</td>
                       <td className="px-3 py-3 text-slate-600">{formatPercent(item.execFisicaPct)}</td>
@@ -588,30 +692,15 @@ function App() {
                       <td className="px-3 py-3 text-slate-600">{item.prazo ? prazoLabels[item.prazo] : '—'}</td>
                       <td className="px-3 py-3 text-slate-600">{formatCurrency(item.valorTotalContratos)}</td>
                       <td className="px-3 py-3">
-                        <div className="flex flex-col gap-1">
-                          <span
-                            className={clsx(
-                              'inline-flex w-fit items-center gap-1 rounded-full px-2 py-1 text-xs font-medium text-white',
-                              {
-                                'bg-emerald-500': item.statusSemaforo === 'verde',
-                                'bg-amber-500': item.statusSemaforo === 'amarelo',
-                                'bg-rose-500': item.statusSemaforo === 'vermelho',
-                              },
-                            )}
-                          >
-                            {semaforoLabels[item.statusSemaforo]}
-                          </span>
-                          {item.motivosSemaforo.length > 0 && (
-                            <ul className="text-xs text-slate-500">
-                              {item.motivosSemaforo.map((motivo) => (
-                                <li key={motivo}>• {motivoLabels[motivo] ?? motivo}</li>
-                              ))}
-                            </ul>
-                          )}
-                        </div>
+                        <SemaforoBadge status={item.statusSemaforo} motivos={item.motivosSemaforo} />
                       </td>
                       <td className="px-3 py-3 text-slate-600">
-                        {item.riscoCurto ? item.riscoCurto : '—'}
+                        <span
+                          className="block max-w-xs truncate"
+                          title={item.riscoCompleto ?? undefined}
+                        >
+                          {item.riscoCurto ?? '—'}
+                        </span>
                       </td>
                       <td className="px-3 py-3 text-slate-600">{formatDateTime(item.ultimaAtualizacao)}</td>
                     </tr>
@@ -680,6 +769,11 @@ function App() {
                       <p className="text-slate-600">
                         Última actualização: {formatDateTime(project.ultimaAtualizacao)}
                       </p>
+                      {project.riscoCompleto && (
+                        <p className="text-slate-600">
+                          Último risco: <span className="font-medium">{project.riscoCurto}</span>
+                        </p>
+                      )}
                       {project.motivosSemaforo.length > 0 && (
                         <ul className="list-disc pl-4 text-xs text-slate-500">
                           {project.motivosSemaforo.map((motivo) => (
@@ -687,6 +781,13 @@ function App() {
                           ))}
                         </ul>
                       )}
+                      <button
+                        type="button"
+                        className="mt-2 inline-flex items-center rounded-md border border-slate-300 px-2 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-100"
+                        onClick={() => openProjectDetail(project)}
+                      >
+                        Ver detalhe
+                      </button>
                     </div>
                   </Popup>
                 </Marker>
@@ -699,6 +800,16 @@ function App() {
         </div>
       </div>
     </div>
+      {isDetailOpen && detailProject && (
+        <ProjectDetailDialog
+          project={detailProject}
+          resumo={detailResumo}
+          isLoading={isDetailLoading}
+          error={detailError}
+          onClose={closeDetail}
+        />
+      )}
+    </>
   );
 }
 
@@ -706,10 +817,14 @@ function KpiCard({
   label,
   value,
   accent,
+  onClick,
+  isActive = false,
 }: {
   label: string;
   value: number | string;
   accent: 'emerald' | 'cyan' | 'rose' | 'amber' | 'indigo' | 'violet';
+  onClick?: () => void;
+  isActive?: boolean;
 }) {
   const accentClasses: Record<'emerald' | 'cyan' | 'rose' | 'amber' | 'indigo' | 'violet', string> = {
     emerald: 'from-emerald-500/10 to-emerald-500/5 text-emerald-700',
@@ -720,10 +835,222 @@ function KpiCard({
     violet: 'from-violet-500/10 to-violet-500/5 text-violet-700',
   } as const;
 
+  const clickable = typeof onClick === 'function';
+  const testId = `kpi-card-${label.toLowerCase().replace(/[^a-z0-9]+/gi, '-')}`;
+
+  const commonClasses = clsx(
+    'rounded-lg border border-slate-200 bg-gradient-to-br p-4 text-left shadow-sm transition',
+    accentClasses[accent],
+    clickable && 'cursor-pointer hover:shadow-md focus:outline-none focus:ring-2 focus:ring-brand-300',
+    isActive && 'ring-2 ring-brand-500 ring-offset-2',
+  );
+
+  if (clickable) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        aria-pressed={isActive}
+        data-testid={testId}
+        className={commonClasses}
+      >
+        <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
+        <p className="mt-2 text-2xl font-semibold text-slate-900">{value}</p>
+      </button>
+    );
+  }
+
   return (
-    <div className={clsx('rounded-lg border border-slate-200 bg-gradient-to-br p-4 shadow-sm', accentClasses[accent])}>
+    <div className={commonClasses} data-testid={testId}>
       <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
       <p className="mt-2 text-2xl font-semibold text-slate-900">{value}</p>
+    </div>
+  );
+}
+
+function SemaforoBadge({
+  status,
+  motivos,
+}: {
+  status: SemaforoStatus;
+  motivos: string[];
+}) {
+  const badgeClasses: Record<SemaforoStatus, string> = {
+    verde: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+    amarelo: 'border-amber-200 bg-amber-50 text-amber-700',
+    vermelho: 'border-rose-200 bg-rose-50 text-rose-700',
+  } as const;
+
+  const dotClasses: Record<SemaforoStatus, string> = {
+    verde: 'bg-emerald-500',
+    amarelo: 'bg-amber-500',
+    vermelho: 'bg-rose-500',
+  } as const;
+
+  const tooltip =
+    motivos.length > 0
+      ? motivos
+          .map((motivo) => motivoLabels[motivo] ?? motivo)
+          .join('\n')
+      : 'Sem alertas adicionais';
+
+  return (
+    <span
+      className={clsx(
+        'inline-flex w-fit items-center gap-2 rounded-full border px-2.5 py-1 text-xs font-medium transition',
+        badgeClasses[status],
+        motivos.length > 0 && 'cursor-help',
+      )}
+      title={tooltip}
+    >
+      <span className={clsx('h-2.5 w-2.5 rounded-full', dotClasses[status])} />
+      {semaforoLabels[status]}
+    </span>
+  );
+}
+
+function ProjectDetailDialog({
+  project,
+  resumo,
+  isLoading,
+  error,
+  onClose,
+}: {
+  project: ProjectListItem;
+  resumo: ProjetoResumoResponse['data'] | null;
+  isLoading: boolean;
+  error: string | null;
+  onClose: () => void;
+}) {
+  const handleOverlayClick = (event: MouseEvent<HTMLDivElement>) => {
+    if (event.target === event.currentTarget) {
+      onClose();
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4 py-8"
+      onClick={handleOverlayClick}
+      role="dialog"
+      aria-modal="true"
+      data-testid="project-detail-dialog"
+    >
+      <div className="relative w-full max-w-3xl rounded-xl bg-white shadow-xl">
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute right-4 top-4 text-sm font-medium text-slate-500 transition hover:text-slate-700"
+        >
+          Fechar ✕
+        </button>
+        <div className="border-b border-slate-200 px-6 py-5">
+          <p className="text-xs uppercase tracking-wide text-slate-500">Projecto</p>
+          <h2 className="mt-1 text-2xl font-semibold text-slate-900">{project.nome}</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            {project.provincia ?? 'Província não definida'} • {project.tipoProjeto}
+          </p>
+        </div>
+        <div className="px-6 py-5">
+          <div className="mb-4 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-lg border border-slate-200 p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                Estado semafórico
+              </p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <SemaforoBadge
+                  status={resumo?.statusSemaforo ?? project.statusSemaforo}
+                  motivos={resumo?.motivosSemaforo ?? project.motivosSemaforo}
+                />
+                {(resumo?.motivosSemaforo ?? project.motivosSemaforo).length > 0 && (
+                  <ul className="text-xs text-slate-500">
+                    {(resumo?.motivosSemaforo ?? project.motivosSemaforo).map((motivo) => (
+                      <li key={motivo}>{motivoLabels[motivo] ?? motivo}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+            <div className="rounded-lg border border-slate-200 p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                Execução actual
+              </p>
+              <div className="mt-2 grid grid-cols-2 gap-4 text-sm text-slate-600">
+                <div>
+                  <p className="text-xs text-slate-500">Execução física</p>
+                  <p className="text-lg font-semibold text-slate-900">
+                    {formatPercent(project.execFisicaPct)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500">Execução financeira</p>
+                  <p className="text-lg font-semibold text-slate-900">
+                    {formatPercent(project.execFinanceiraPct)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500">Prazo</p>
+                  <p className="text-lg font-semibold text-slate-900">
+                    {project.prazo ? prazoLabels[project.prazo] : '—'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500">Último risco</p>
+                  <p className="text-sm text-slate-700" title={project.riscoCompleto ?? undefined}>
+                    {project.riscoCurto ?? 'Sem registo'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="rounded-lg border border-slate-200 p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                Contratos
+              </p>
+              {isLoading && <p className="mt-2 text-sm text-slate-500">A carregar resumo…</p>}
+              {error && <p className="mt-2 text-sm text-rose-600">{error}</p>}
+              {resumo && !isLoading && !error && (
+                <div className="mt-2 space-y-2 text-sm text-slate-600">
+                  <p>
+                    <span className="font-semibold text-slate-900">{resumo.totalContratos}</span>{' '}
+                    contratos activos
+                  </p>
+                  <p>
+                    Valor total:{' '}
+                    <span className="font-semibold text-slate-900">
+                      {formatCurrency(resumo.valorTotalContratoMT)}
+                    </span>
+                  </p>
+                </div>
+              )}
+            </div>
+            <div className="rounded-lg border border-slate-200 p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                Próximas datas-chave
+              </p>
+              {isLoading && <p className="mt-2 text-sm text-slate-500">A carregar marcos…</p>}
+              {resumo && resumo.proximasDatasChave.length === 0 && !isLoading && (
+                <p className="mt-2 text-sm text-slate-500">Sem marcos futuros registados.</p>
+              )}
+              {resumo && resumo.proximasDatasChave.length > 0 && (
+                <ul className="mt-2 space-y-2 text-sm text-slate-600">
+                  {resumo.proximasDatasChave.map((marco) => (
+                    <li key={marco.id} className="rounded border border-slate-200 px-3 py-2">
+                      <p className="font-medium text-slate-900">{marco.tipo}</p>
+                      <p className="text-xs text-slate-500">
+                        {formatDateTime(marco.data)}
+                      </p>
+                      {marco.nota && <p className="text-xs text-slate-500">{marco.nota}</p>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

@@ -6,7 +6,7 @@ API construída com [NestJS](https://nestjs.com/) + [Prisma](https://www.prisma.
 
 - Node.js >= 20
 - npm >= 10
-- Docker (opcional, utilizado para a base de dados via `docker-compose`)
+- Docker (opcional, utilizado para a base de dados via `docker compose`)
 
 ## Configuração inicial
 
@@ -17,10 +17,15 @@ API construída com [NestJS](https://nestjs.com/) + [Prisma](https://www.prisma.
    ```
 3. (Opcional) Levante a base de dados local via Docker a partir da raiz do repositório:
    ```bash
-   docker-compose up -d
+   npm run dev:stack
    ```
-4. (Opcional) Ajuste a tolerância máxima para datas futuras dos relatórios quinzenais através da variável `RELATORIOS_TOLERANCIA_FUTURO_DIAS` (padrão `3`).
-5. Execute as migrações e gere o cliente Prisma:
+   Este comando aguarda o Postgres ficar saudável, aplica `prisma migrate deploy`, corre as seeds e arranca o backend em modo watch dentro do container.
+4. Ajuste as variáveis de ambiente conforme necessário:
+   - `DATABASE_URL` – se não for definido, o Prisma recorre a `file:./dev.db` (SQLite) para um modo "demo" local.
+   - `CORS_ORIGIN` – origens permitidas para o frontend (ex.: `http://localhost:5173`).
+   - `THROTTLE_TTL_MS` / `THROTTLE_LIMIT` – parâmetros do rate limiting global.
+   - `RELATORIOS_TOLERANCIA_FUTURO_DIAS` – tolerância máxima para `dataRef` futura (padrão `3`).
+5. Execute as migrações e gere o cliente Prisma para desenvolvimento local:
    ```bash
    npm run prisma:migrate
    ```
@@ -36,6 +41,7 @@ API construída com [NestJS](https://nestjs.com/) + [Prisma](https://www.prisma.
 | `npm run start:dev` | Inicia o servidor em modo watch (porta definida em `PORT`, padrão `3000`). |
 | `npm run start` | Inicia o servidor em modo produção. |
 | `npm run prisma:migrate` | Executa migrações (`prisma migrate dev`). |
+| `npm run prisma:migrate:deploy` | Aplica migrações existentes sem gerar novas (utilizado em CI/Docker). |
 | `npm run prisma:generate` | Gera o cliente Prisma. |
 | `npm run seed:dev` | Corre o script de seed configurado em `prisma/seed.ts`. |
 | `npm run reset:dev` | Reinicia a BD (`prisma migrate reset --seed`). |
@@ -79,9 +85,9 @@ A documentação interactiva está disponível em `/docs` (Swagger) depois de in
 ## Dashboard consolidado e exportações
 
 - Os KPIs incluídos são: nº de projectos em curso/concluídos/parados, investimento total (somatório `valorGlobalMT`), média de execução física dos últimos relatórios e nº de riscos activos (texto preenchido).
-- A lista consolidada inclui: identificação, localização, tipo, percentagens de execução, estado de prazo, valor total dos contratos, semáforo definitivo com motivos e última actualização.
+- A lista consolidada inclui: identificação, localização, tipo, percentagens de execução, estado de prazo, valor total dos contratos, semáforo definitivo com motivos, risco completo e última actualização.
 - Filtros suportados: `provinciaId`, `tipoProjeto`, `estado` + ordenação (`sortBy`, `sortOrder`) e paginação (`page`, `pageSize`).
-- As exportações replicam exactamente os filtros seleccionados e estão disponíveis em Excel (`.xlsx`) e PDF.
+- As exportações replicam exactamente os filtros seleccionados, incluem cabeçalhos com filtros/data e estão disponíveis em Excel (`.xlsx`) e PDF (com cabeçalho/rodapé).
 
 ## Qualidade
 
@@ -97,6 +103,7 @@ npm install
 npm run prisma:migrate
 npm run seed:dev
 npm run start:dev
+# ou utilise o modo rápido com SQLite: DATABASE_URL=file:./dev.db npm run dev:demo (a partir da raiz)
 # abrir http://localhost:3000/docs
 ```
 

@@ -31,11 +31,11 @@ export class ProjetosService {
     }
 
     if (dto.latitude !== undefined) {
-      data.latitude = new Prisma.Decimal(dto.latitude);
+      data.latitude = dto.latitude;
     }
 
     if (dto.longitude !== undefined) {
-      data.longitude = new Prisma.Decimal(dto.longitude);
+      data.longitude = dto.longitude;
     }
 
     if (dto.valorGlobalMT !== undefined) {
@@ -65,7 +65,7 @@ export class ProjetosService {
     }
 
     if (filtro.search) {
-      where.nome = { contains: filtro.search, mode: 'insensitive' };
+      where.nome = { contains: filtro.search };
     }
 
     return this.prisma.projeto.findMany({
@@ -191,10 +191,8 @@ export class ProjetosService {
     if (dto.tipoProjeto !== undefined) data.tipoProjeto = dto.tipoProjeto;
     if (dto.chaveNaMao !== undefined) data.chaveNaMao = dto.chaveNaMao;
     if (dto.estado !== undefined) data.estado = dto.estado;
-    if (dto.latitude !== undefined)
-      data.latitude = new Prisma.Decimal(dto.latitude);
-    if (dto.longitude !== undefined)
-      data.longitude = new Prisma.Decimal(dto.longitude);
+    if (dto.latitude !== undefined) data.latitude = dto.latitude;
+    if (dto.longitude !== undefined) data.longitude = dto.longitude;
     if (dto.valorGlobalMT !== undefined)
       data.valorGlobalMT = new Prisma.Decimal(dto.valorGlobalMT);
     if (dto.provinciaId !== undefined)

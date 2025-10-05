@@ -9,6 +9,7 @@ import {
 import { Perfil } from '@prisma/client';
 import { Throttle } from '@nestjs/throttler';
 import { DashboardService } from './dashboard.service';
+import type { OverviewResponse } from './dashboard.service';
 import {
   DashboardExportQueryDto,
   DashboardOverviewQueryDto,
@@ -102,13 +103,17 @@ export class DashboardController {
       },
     },
   })
-  overview(@Query() query: DashboardOverviewQueryDto) {
+  overview(
+    @Query() query: DashboardOverviewQueryDto,
+  ): Promise<OverviewResponse> {
     return this.dashboardService.getOverview(query);
   }
 
   @Get('overview/export')
   @Roles(Perfil.Admin, Perfil.Director, Perfil.Gestor)
-  @Throttle(5, 60)
+  @Throttle({
+    default: { limit: 5, ttl: 60 },
+  })
   @ApiOperation({
     summary: 'Exportar a tabela consolidada filtrada para Excel ou PDF.',
     description:

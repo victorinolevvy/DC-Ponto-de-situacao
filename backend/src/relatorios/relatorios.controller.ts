@@ -19,11 +19,13 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { Perfil } from '@prisma/client';
+import type { RelatorioQuinzenal } from '@prisma/client';
 import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { RelatoriosService } from './relatorios.service';
+import type { ListResult } from './relatorios.service';
 import { CreateRelatorioDto } from './dto/create-relatorio.dto';
 import {
   ListRelatorioQueryDto,
@@ -46,7 +48,9 @@ export class RelatoriosController {
 
   @Post('projetos/:projetoId/relatorios')
   @Roles(Perfil.Admin, Perfil.Gestor)
-  @Throttle(10, 60)
+  @Throttle({
+    default: { limit: 10, ttl: 60 },
+  })
   @ApiOperation({
     summary: 'Registar um novo relatório quinzenal para o projeto.',
     description:
@@ -151,7 +155,7 @@ export class RelatoriosController {
     @Param('projetoId', ParseIntPipe) projetoId: number,
     @Query() query: ListRelatorioQueryDto,
     @CurrentUser() user: CurrentUserPayload,
-  ) {
+  ): Promise<ListResult<RelatorioQuinzenal>> {
     return this.relatoriosService.listar(projetoId, query, user);
   }
 
@@ -188,7 +192,9 @@ export class RelatoriosController {
 
   @Patch('relatorios/:id')
   @Roles(Perfil.Admin, Perfil.Gestor)
-  @Throttle(10, 60)
+  @Throttle({
+    default: { limit: 10, ttl: 60 },
+  })
   @ApiOperation({
     summary: 'Actualizar um relatório quinzenal.',
     description:
@@ -225,7 +231,9 @@ export class RelatoriosController {
 
   @Delete('relatorios/:id')
   @Roles(Perfil.Admin)
-  @Throttle(5, 60)
+  @Throttle({
+    default: { limit: 5, ttl: 60 },
+  })
   @ApiOperation({ summary: 'Remover (soft-delete) um relatório quinzenal.' })
   @ApiOkResponse({
     description: 'Relatório marcado como removido.',

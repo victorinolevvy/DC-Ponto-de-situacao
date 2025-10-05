@@ -1,7 +1,9 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
-
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/unbound-method */
+
 import {
   INestApplication,
   ClassSerializerInterceptor,
@@ -887,6 +889,13 @@ describe('AppController (e2e)', () => {
       expect(body.data.kpis.totalEmCurso).toBe(1);
       expect(body.data.lista.items).toHaveLength(1);
       expect(body.data.lista.items[0].statusSemaforo).toBe('amarelo');
+      expect(body.data.lista.items[0]).toEqual(
+        expect.objectContaining({
+          riscoCurto: 'Observado atraso na entrega de cabos.',
+          riscoCompleto: 'Observado atraso na entrega de cabos.',
+          motivosSemaforo: expect.arrayContaining(['risco_em_monitorizacao']),
+        }),
+      );
       expect(body.data.lista.meta).toEqual(
         expect.objectContaining({
           total: 1,
@@ -1123,6 +1132,7 @@ describe('AppController (e2e)', () => {
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       );
       expect(response.body.length).toBeGreaterThan(0);
+      expect(response.body.subarray(0, 2).toString('ascii')).toBe('PK');
     });
 
     it('/dashboard/overview/export (GET) gera ficheiro PDF', async () => {
@@ -1188,6 +1198,7 @@ describe('AppController (e2e)', () => {
 
       expect(response.headers['content-type']).toContain('application/pdf');
       expect(response.body.length).toBeGreaterThan(0);
+      expect(response.body.subarray(0, 4).toString('ascii')).toBe('%PDF');
     });
   });
 });

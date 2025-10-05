@@ -4,6 +4,7 @@ import {
   Prisma,
   PrazoStatus,
   RelatorioQuinzenal,
+  TipoProjeto,
 } from '@prisma/client';
 import { Workbook } from 'exceljs';
 import PDFDocument from 'pdfkit';
@@ -29,11 +30,19 @@ interface ProjetoResumo {
   valorGlobalMT: number | null;
   statusSemaforo: 'verde' | 'amarelo' | 'vermelho';
   motivosSemaforo: string[];
+  riscoCompleto: string | null;
   riscoCurto: string | null;
   ultimaAtualizacao: string;
 }
 
-interface OverviewResponse {
+interface FilterMetadata {
+  provincia: string;
+  tipoProjeto: string;
+  estado: string;
+  generatedAt: Date;
+}
+
+export interface OverviewResponse {
   kpis: {
     totalEmCurso: number;
     totalConcluido: number;
@@ -100,16 +109,17 @@ export class DashboardService {
       query.sortBy ?? 'ultimaAtualizacao',
       query.sortOrder ?? (query.sortBy === 'nome' ? 'asc' : 'desc'),
     );
+    const filterMetadata = await this.resolveFilterMetadata(query);
 
     if (query.format === 'xlsx') {
-      const buffer = await this.generateExcelBuffer(summaries);
+      const buffer = await this.generateExcelBuffer(summaries, filterMetadata);
       return new StreamableFile(buffer, {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         disposition: `attachment; filename="dashboard-${Date.now()}.xlsx"`,
       });
     }
 
-    const buffer = await this.generatePdfBuffer(summaries);
+    const buffer = await this.generatePdfBuffer(summaries, filterMetadata);
     return new StreamableFile(buffer, {
       type: 'application/pdf',
       disposition: `attachment; filename="dashboard-${Date.now()}.pdf"`,
@@ -256,10 +266,53 @@ export class DashboardService {
         valorGlobalMT: valorGlobal,
         statusSemaforo,
         motivosSemaforo,
-        riscoCurto: riscoNormalizado ? riscoNormalizado.slice(0, 140) : null,
+        riscoCompleto: riscoNormalizado,
+        riscoCurto: riscoNormalizado
+          ? this.truncateWithEllipsis(riscoNormalizado, 140)
+          : null,
         ultimaAtualizacao,
       };
     });
+  }
+
+  private async resolveFilterMetadata(
+    query: DashboardOverviewQueryDto,
+  ): Promise<FilterMetadata> {
+    const metadata: FilterMetadata = {
+      provincia: 'Todas',
+      tipoProjeto: 'Todos',
+      estado: 'Todos',
+      generatedAt: new Date(),
+    };
+
+    if (query.provinciaId) {
+      const provincia = await this.prisma.provincia.findUnique({
+        where: { id: query.provinciaId },
+        select: { nome: true },
+      });
+      metadata.provincia = provincia?.nome ?? `ID ${query.provinciaId}`;
+    }
+
+    if (query.tipoProjeto) {
+      const tipoLabels: Record<TipoProjeto, string> = {
+        FV: 'Fotovoltaico',
+        Hidrica: 'Hídrica',
+        MiniRede: 'Mini-rede',
+        Outro: 'Outro',
+      };
+      metadata.tipoProjeto = tipoLabels[query.tipoProjeto] ?? query.tipoProjeto;
+    }
+
+    if (query.estado) {
+      const estadoLabels: Record<EstadoProjeto, string> = {
+        EmCurso: 'Em curso',
+        Concluido: 'Concluído',
+        Parado: 'Parado',
+      };
+      metadata.estado = estadoLabels[query.estado] ?? query.estado;
+    }
+
+    return metadata;
   }
 
   private sortSummaries(
@@ -379,42 +432,138 @@ export class DashboardService {
     };
   }
 
-  private async generateExcelBuffer(items: ProjetoResumo[]): Promise<Buffer> {
-    const workbook = new Workbook();
-    const sheet = workbook.addWorksheet('Projetos');
+  private truncateWithEllipsis(value: string, maxLength: number): string {
+    if (value.length <= maxLength) {
+      return value;
+    }
 
-    sheet.columns = [
-      { header: 'ID', key: 'id', width: 8 },
-      { header: 'Nome', key: 'nome', width: 32 },
-      { header: 'Província', key: 'provincia', width: 20 },
-      { header: 'Tipo', key: 'tipoProjeto', width: 18 },
-      { header: '% Físico', key: 'execFisicaPct', width: 12 },
-      { header: '% Financeiro', key: 'execFinanceiraPct', width: 14 },
-      { header: 'Prazo', key: 'prazo', width: 14 },
-      { header: 'Valor Contratos (MT)', key: 'valorTotalContratos', width: 20 },
-      { header: 'Semáforo', key: 'statusSemaforo', width: 12 },
-      { header: 'Risco', key: 'riscoCurto', width: 50 },
-      { header: 'Última atualização', key: 'ultimaAtualizacao', width: 24 },
-    ];
+    return `${value.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
+  }
+
+  private async generateExcelBuffer(
+    items: ProjetoResumo[],
+    filters: FilterMetadata,
+  ): Promise<Buffer> {
+    const workbook = new Workbook();
+    const sheet = workbook.addWorksheet('Projetos', {
+      properties: { tabColor: { argb: 'FF2563EB' } },
+    });
+
+    sheet.mergeCells(1, 1, 1, 10);
+    const titleCell = sheet.getCell('A1');
+    titleCell.value = 'Dashboard consolidado de projectos';
+    titleCell.font = { bold: true, size: 16, color: { argb: 'FF0F172A' } };
+    titleCell.alignment = { horizontal: 'center' };
+
+    sheet.mergeCells(2, 1, 2, 10);
+    const filtersCell = sheet.getCell('A2');
+    filtersCell.value = `Filtros aplicados — Província: ${filters.provincia} | Tipo: ${filters.tipoProjeto} | Estado: ${filters.estado}`;
+    filtersCell.font = { italic: true, color: { argb: 'FF475569' } };
+    filtersCell.alignment = { horizontal: 'center' };
+
+    sheet.mergeCells(3, 1, 3, 10);
+    const generatedCell = sheet.getCell('A3');
+    generatedCell.value = `Gerado em ${filters.generatedAt.toLocaleString('pt-PT')}`;
+    generatedCell.font = { size: 10, color: { argb: 'FF64748B' } };
+    generatedCell.alignment = { horizontal: 'center' };
+
+    sheet.addRow([]);
+
+    const headerRow = sheet.addRow([
+      'Projeto',
+      'Província',
+      'Tipo',
+      '% Físico',
+      '% Financeiro',
+      'Prazo',
+      'Valor (MT)',
+      'Semáforo',
+      'Último Risco',
+      'Última Atualização',
+    ]);
+    headerRow.font = { bold: true, color: { argb: 'FF0F172A' } };
+    headerRow.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFE2E8F0' },
+    };
+    headerRow.alignment = {
+      vertical: 'middle',
+      horizontal: 'center',
+      wrapText: true,
+    };
+
+    sheet.autoFilter = {
+      from: { row: headerRow.number, column: 1 },
+      to: { row: headerRow.number, column: 10 },
+    };
+
+    sheet.views = [{ state: 'frozen', ySplit: headerRow.number }];
+
+    const columnWidths = [32, 20, 16, 12, 14, 14, 18, 14, 48, 24];
+    columnWidths.forEach((width, index) => {
+      const column = sheet.getColumn(index + 1);
+      column.width = width;
+      column.alignment =
+        index >= 3 && index <= 7
+          ? { horizontal: 'center', vertical: 'middle', wrapText: true }
+          : { vertical: 'middle', wrapText: true };
+    });
+
+    sheet.getColumn(9).alignment = {
+      vertical: 'top',
+      wrapText: true,
+    };
 
     items.forEach((item) => {
-      sheet.addRow({
-        ...item,
-        execFisicaPct: item.execFisicaPct ?? '-',
-        execFinanceiraPct: item.execFinanceiraPct ?? '-',
-        prazo: item.prazo ?? '-',
-        riscoCurto: item.riscoCurto ?? '-',
-      });
+      const row = sheet.addRow([
+        item.nome,
+        item.provincia ?? '—',
+        item.tipoProjeto,
+        item.execFisicaPct != null ? item.execFisicaPct / 100 : null,
+        item.execFinanceiraPct != null ? item.execFinanceiraPct / 100 : null,
+        item.prazo ?? '—',
+        item.valorTotalContratos,
+        item.statusSemaforo.toUpperCase(),
+        item.riscoCompleto ?? '—',
+        new Date(item.ultimaAtualizacao),
+      ]);
+
+      const fisicaCell = row.getCell(4);
+      if (item.execFisicaPct != null) {
+        fisicaCell.numFmt = '0.00%';
+      } else {
+        fisicaCell.value = '—';
+      }
+
+      const financeiraCell = row.getCell(5);
+      if (item.execFinanceiraPct != null) {
+        financeiraCell.numFmt = '0.00%';
+      } else {
+        financeiraCell.value = '—';
+      }
+
+      row.getCell(7).numFmt = '#,##0.00 "MT"';
+      row.getCell(8).alignment = {
+        horizontal: 'center',
+        vertical: 'middle',
+      };
+      row.getCell(10).numFmt = 'dd/mm/yyyy hh:mm';
+      row.commit();
     });
 
     const buffer = await workbook.xlsx.writeBuffer();
     return Buffer.from(buffer);
   }
 
-  private async generatePdfBuffer(items: ProjetoResumo[]): Promise<Buffer> {
+  private async generatePdfBuffer(
+    items: ProjetoResumo[],
+    filters: FilterMetadata,
+  ): Promise<Buffer> {
     return new Promise<Buffer>((resolve, reject) => {
-      const doc = new PDFDocument({ margin: 40, size: 'A4' });
+      const doc = new PDFDocument({ margin: 32, size: 'A4' });
       const chunks: Buffer[] = [];
+      let currentPageNumber = 1;
 
       doc.on('data', (chunk) => chunks.push(chunk as Buffer));
       doc.on('end', () => resolve(Buffer.concat(chunks)));
@@ -425,39 +574,184 @@ export class DashboardService {
           reject(new Error(String(err)));
         }
       });
-
-      doc.fontSize(16).text('Dashboard Consolidado', { align: 'center' });
-      doc.moveDown();
-
-      items.forEach((item, index) => {
-        doc
-          .fontSize(12)
-          .text(`${index + 1}. ${item.nome} (${item.provincia ?? 'N/D'})`);
-        doc
-          .fontSize(10)
-          .text(
-            `Tipo: ${item.tipoProjeto} | Semáforo: ${item.statusSemaforo.toUpperCase()} | Última atualização: ${new Date(
-              item.ultimaAtualizacao,
-            ).toLocaleDateString('pt-PT')}`,
-          );
-        doc
-          .fontSize(10)
-          .text(
-            `Execução Fís.: ${item.execFisicaPct ?? 'N/D'} | Execução Fin.: ${
-              item.execFinanceiraPct ?? 'N/D'
-            } | Prazo: ${item.prazo ?? 'N/D'}`,
-          );
-        doc.fontSize(10).text(
-          `Valor Contratos: ${item.valorTotalContratos.toLocaleString('pt-PT', {
-            minimumFractionDigits: 2,
-          })} MT`,
-        );
-        if (item.riscoCurto) {
-          doc.fontSize(10).text(`Risco: ${item.riscoCurto}`, { width: 500 });
-        }
-        doc.moveDown();
+      doc.on('pageAdded', () => {
+        currentPageNumber += 1;
       });
 
+      const columnWidths = [80, 54, 50, 38, 38, 48, 60, 48, 80, 50];
+      const totalWidth = columnWidths.reduce((acc, value) => acc + value, 0);
+      const tableX = doc.page.margins.left;
+      let currentY = doc.page.margins.top;
+
+      function addFooter() {
+        const footerY = doc.page.height - doc.page.margins.bottom + 6;
+        doc
+          .strokeColor('#CBD5F5')
+          .moveTo(tableX, footerY - 12)
+          .lineTo(tableX + totalWidth, footerY - 12)
+          .stroke();
+        doc
+          .fontSize(9)
+          .fillColor('#475569')
+          .text(
+            `Gerado em ${filters.generatedAt.toLocaleString('pt-PT')}`,
+            tableX,
+            footerY - 10,
+            { width: totalWidth / 2 },
+          );
+        doc.text(
+          `Página ${currentPageNumber}`,
+          tableX + totalWidth / 2,
+          footerY - 10,
+          {
+            width: totalWidth / 2,
+            align: 'right',
+          },
+        );
+      }
+
+      const headerLabels = [
+        'Projeto',
+        'Província',
+        'Tipo',
+        '% Físico',
+        '% Financeiro',
+        'Prazo',
+        'Valor (MT)',
+        'Semáforo',
+        'Último Risco',
+        'Última Atualização',
+      ];
+
+      function drawRow(cells: string[], isHeader = false) {
+        doc
+          .fontSize(isHeader ? 10 : 9)
+          .fillColor(isHeader ? '#0F172A' : '#1F2937');
+        const heights = cells.map((cell, index) =>
+          doc.heightOfString(cell, {
+            width: columnWidths[index],
+          }),
+        );
+        const rowHeight = Math.max(...heights) + (isHeader ? 4 : 2);
+
+        if (
+          currentY + rowHeight >
+          doc.page.height - doc.page.margins.bottom - (isHeader ? 40 : 24)
+        ) {
+          addFooter();
+          doc.addPage();
+          currentY = doc.page.margins.top;
+          addHeader();
+        }
+
+        let x = tableX;
+        cells.forEach((cell, index) => {
+          const align = index >= 3 && index <= 7 ? 'center' : 'left';
+          doc.text(cell, x, currentY, {
+            width: columnWidths[index],
+            align,
+          });
+          x += columnWidths[index];
+          doc.x = x;
+          doc.y = currentY;
+        });
+
+        currentY += rowHeight;
+        doc
+          .strokeColor(isHeader ? '#94A3B8' : '#E2E8F0')
+          .lineWidth(isHeader ? 1 : 0.5)
+          .moveTo(tableX, currentY)
+          .lineTo(tableX + totalWidth, currentY)
+          .stroke();
+        currentY += 6;
+      }
+
+      function addHeader() {
+        doc.fillColor('#0F172A');
+        doc.rect(tableX, currentY - 4, 36, 36).fill('#0F172A');
+        doc
+          .fillColor('#0F172A')
+          .fontSize(18)
+          .text('Ponto de Situação Consolidado', tableX + 44, currentY);
+        doc
+          .fontSize(10)
+          .fillColor('#475569')
+          .text(
+            'Direcção Nacional de Electrificação Rural',
+            tableX + 44,
+            doc.y,
+            {
+              width: totalWidth - 44,
+            },
+          );
+        doc.moveDown(0.5);
+        doc
+          .fontSize(10)
+          .fillColor('#475569')
+          .text(
+            `Filtros: Província = ${filters.provincia} | Tipo = ${filters.tipoProjeto} | Estado = ${filters.estado}`,
+            tableX,
+            doc.y,
+            { width: totalWidth },
+          );
+        doc.moveDown(0.3);
+        doc
+          .fontSize(10)
+          .fillColor('#475569')
+          .text(
+            `Gerado em ${filters.generatedAt.toLocaleString('pt-PT')}`,
+            tableX,
+            doc.y,
+            { width: totalWidth },
+          );
+        currentY = doc.y + 12;
+        drawRow(headerLabels, true);
+      }
+
+      addHeader();
+
+      if (items.length === 0) {
+        doc
+          .fontSize(11)
+          .fillColor('#475569')
+          .text(
+            'Sem projectos para os filtros seleccionados.',
+            tableX,
+            currentY + 8,
+            {
+              width: totalWidth,
+              align: 'center',
+            },
+          );
+        addFooter();
+        doc.end();
+        return;
+      }
+
+      const formatPercent = (value: number | null) =>
+        value != null ? `${value.toFixed(1)}%` : '—';
+      const formatCurrency = (value: number) =>
+        new Intl.NumberFormat('pt-PT', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        }).format(value);
+
+      items.forEach((item) => {
+        drawRow([
+          item.nome,
+          item.provincia ?? '—',
+          item.tipoProjeto,
+          formatPercent(item.execFisicaPct),
+          formatPercent(item.execFinanceiraPct),
+          item.prazo ?? '—',
+          `${formatCurrency(item.valorTotalContratos)} MT`,
+          item.statusSemaforo.toUpperCase(),
+          item.riscoCompleto ?? '—',
+          new Date(item.ultimaAtualizacao).toLocaleString('pt-PT'),
+        ]);
+      });
+
+      addFooter();
       doc.end();
     });
   }

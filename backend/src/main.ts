@@ -13,7 +13,17 @@ async function bootstrap() {
   const logger = app.get(Logger);
   app.useLogger(logger);
 
-  app.enableCors({ origin: true, credentials: true });
+  const configService = app.get(ConfigService);
+  const corsOrigin = configService.get<string>('CORS_ORIGIN');
+  const allowedOrigins = corsOrigin
+    ?.split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+  app.enableCors({
+    origin: allowedOrigins && allowedOrigins.length > 0 ? allowedOrigins : true,
+    credentials: true,
+  });
   app.setGlobalPrefix('api');
   app.useGlobalPipes(
     new ValidationPipe({
@@ -31,7 +41,6 @@ async function bootstrap() {
   );
   app.useGlobalFilters(new HttpExceptionFilter());
 
-  const configService = app.get(ConfigService);
   const config = new DocumentBuilder()
     .setTitle('Ponto de Situação API')
     .setDescription('API do MVP para electrificação rural')

@@ -11,64 +11,64 @@ Monorepositório para o MVP de reporte quinzenal dos projectos de electrificaç�
 └── docker-compose.yml  # Postgres local para desenvolvimento
 ```
 
-## Iteração 1 – Entregue
+## Scripts principais
 
-- Bootstrap do backend com NestJS 11, Prisma e PostgreSQL
-- Autenticação JWT com perfis (Gestor, Director, Admin)
-- CRUD de localizações (províncias, distritos, postos administrativos)
-- CRUD inicial de projectos
-- Seeds com utilizadores demo e dados geográficos
-- Documentação Swagger disponível em `/docs`
-- Testes básicos de contrato (Supertest)
+Na raiz do repositório existem scripts que orquestram os ambientes mais comuns:
 
-> Consulte o [README do backend](backend/README.md) para instruções detalhadas de configuração, scripts e endpoints.
+- `npm run dev:stack` – sobe Postgres + backend (com migrations e seeds automáticas) via Docker Compose.
+- `npm run dev:demo` – modo "demo" sem Docker, utilizando SQLite in-file, arrancando backend e frontend em paralelo.
+- `npm run dev:fe` – apenas o frontend Vite em modo desenvolvimento.
+- `npm run seed:dev` – repõe as seeds idempotentes (utilizadores demo, localização e projectos exemplificativos).
+- `npm run dev:stack:down` – encerra o stack Docker.
 
-## Iteração 5 – Dashboard consolidado (Entregue)
-
-- Endpoint `/dashboard/overview` com KPIs, tabela paginada/ordenável e partilha da lógica de semáforo definitivo.
-- Exportação para Excel e PDF gerada no backend reutilizando os filtros aplicados.
-- Frontend em React (Vite) com mapa Leaflet, tabela filtrável e gestão de token JWT.
-
-> Consulte o [README do frontend](frontend/README.md) para execução local e variáveis `VITE_`.
-
-## Como executar rapidamente o backend
-
-```bash
-cd backend
-npm install
-cp .env.example .env
-# a partir da raiz do repositório
-cd ..
-docker-compose up -d
-cd backend
-npm run prisma:migrate
-npm run seed:dev
-npm run start:dev
-```
-
-Aplicação disponível em `http://localhost:3000` (Swagger em `/docs`).
-
-Credenciais seed:
+As credenciais de demonstração permanecem:
 
 - `admin@demo` / `Senha123!`
 - `director@demo` / `Senha123!`
 - `gestor@demo` / `Senha123!`
 
-## Como executar rapidamente o frontend
+## Execução com Docker Compose
 
 ```bash
-cd frontend
-npm install
-cp .env.example .env  # ajustar VITE_API_URL caso necessário
-npm run dev
+npm run dev:stack
 ```
 
-Aplicação disponível em `http://localhost:5173`.
+O comando aguarda o Postgres (`postgres:15`), aplica migrations (`prisma migrate deploy`), executa `seed:dev` e arranca o backend em modo watch. A API fica disponível em `http://localhost:3000/api` com Swagger em `http://localhost:3000/docs`. Um Adminer opcional está exposto em `http://localhost:8080`.
 
-## Próximos Passos
+### Frontend durante o stack Docker
 
-1. Iteração 6 – Exportações enriquecidas e polimento UI/UX
-2. Iteração 7 – Hardening (testes adicionais, acessibilidade, performance)
+O frontend continua a ser executado fora do Compose para hot reload imediato:
+
+```bash
+npm run dev:fe
+```
+
+Certifica-te de copiar os `.env.example` para `.env` em `backend/` e `frontend/` caso precises de ajustar URLs ou segredos.
+
+## Modo "demo" sem Docker
+
+Para uma experiência rápida sem containerização, utiliza o SQLite embutido:
+
+```bash
+npm run dev:demo
+```
+
+O script define `DATABASE_URL=file:./dev.db`, gera o client Prisma, aplica migrations, executa seeds e arranca backend (`http://localhost:3000/api`) + frontend (`http://localhost:5173`).
+
+## Integração Contínua e screenshots
+
+O workflow [`ci.yml`](.github/workflows/ci.yml) executa lint + testes e2e, build do frontend/backend e captura duas screenshots automáticas com Playwright:
+
+- `artifacts/dashboard-home.png`
+- `artifacts/dashboard-projeto.png`
+
+As imagens são carregadas como artefactos do GitHub Actions para validação visual da dashboard e da vista de detalhe.
+
+## Documentação adicional
+
+- [README do backend](backend/README.md) – configuração detalhada, variáveis de ambiente e endpoints.
+- [README do frontend](frontend/README.md) – comandos Vite/Tailwind e configuração `VITE_API_URL`.
+- [ADR-001](docs/ADR-001.md) – decisões técnicas sobre stack, semáforo e trade-offs.
 
 ## Licença
 
