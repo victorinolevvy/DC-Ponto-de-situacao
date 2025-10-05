@@ -1,0 +1,4 @@
+ALTER TYPE "TipoMarco" ADD VALUE IF NOT EXISTS 'Outro';
+
+ALTER TABLE "Contrato"
+    ADD COLUMN "chaveNaMao" BOOLEAN NOT NULL DEFAULT false;

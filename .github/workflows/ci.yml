@@ -1,0 +1,93 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ponto_dev?schema=public
+      JWT_SECRET: ci-secret
+      JWT_EXPIRES_IN: 3600s
+      RELATORIOS_TOLERANCIA_FUTURO_DIAS: 3
+      CORS_ORIGIN: http://localhost:5173
+      THROTTLE_TTL_MS: 60000
+      THROTTLE_LIMIT: 100
+      PLAYWRIGHT_BASE_URL: http://127.0.0.1:5173
+      PLAYWRIGHT_API_URL: http://127.0.0.1:3000/api
+      PLAYWRIGHT_ARTIFACTS: artifacts
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ponto_dev
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install backend dependencies
+        run: npm --prefix backend ci
+
+      - name: Install frontend dependencies
+        run: npm --prefix frontend ci
+
+      - name: Generate Prisma client
+        run: npm --prefix backend run prisma:generate
+
+      - name: Apply database migrations
+        run: npm --prefix backend run prisma:migrate:deploy
+
+      - name: Seed database
+        run: npm --prefix backend run seed:dev
+
+      - name: Lint backend
+        run: npm --prefix backend run lint
+
+      - name: Run backend e2e tests
+        run: npm --prefix backend run test:e2e
+
+      - name: Build frontend
+        run: npm --prefix frontend run build
+
+      - name: Build backend
+        run: npm --prefix backend run build
+
+      - name: Install Playwright
+        run: npx playwright install --with-deps
+
+      - name: Capture dashboard screenshots
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm --prefix backend run start:prod &
+          BACK_PID=$!
+          npm --prefix frontend run preview -- --host 0.0.0.0 --port 5173 &
+          FRONT_PID=$!
+          npx wait-on http://127.0.0.1:5173
+          node scripts/capture-dashboard.mjs
+          kill $BACK_PID $FRONT_PID || true
+
+      - name: Upload dashboard screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard-screenshots
+          path: artifacts/*.png

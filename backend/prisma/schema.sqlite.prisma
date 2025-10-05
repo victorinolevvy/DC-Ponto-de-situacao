@@ -1,0 +1,166 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Perfil {
+  Gestor
+  Director
+  Admin
+}
+
+enum TipoProjeto {
+  FV
+  Hidrica
+  MiniRede
+  Outro
+}
+
+enum EstadoProjeto {
+  EmCurso
+  Concluido
+  Parado
+}
+
+enum TipoContrato {
+  Civil
+  Rede
+  BESS
+  Fiscalizacao
+  Fornecimento
+}
+
+enum TipoMarco {
+  Consignacao
+  AutoInicio
+  Vistoria
+  PrevFim
+  Fecho
+  Outro
+}
+
+enum PrazoStatus {
+  NO_PRAZO
+  ATRASADO
+  CONCLUIDO
+}
+
+model Provincia {
+  id         Int        @id @default(autoincrement())
+  nome       String     @unique
+  distritos  Distrito[]
+  projetos   Projeto[]
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+}
+
+model Distrito {
+  id          Int        @id @default(autoincrement())
+  nome        String
+  provinciaId Int
+  provincia   Provincia  @relation(fields: [provinciaId], references: [id], onDelete: Cascade)
+  postos      PostoAdm[]
+  projetos    Projeto[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@unique([nome, provinciaId])
+}
+
+model PostoAdm {
+  id         Int        @id @default(autoincrement())
+  nome       String
+  distritoId Int
+  distrito   Distrito   @relation(fields: [distritoId], references: [id], onDelete: Cascade)
+  projetos   Projeto[]
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  @@unique([nome, distritoId])
+}
+
+model Projeto {
+  id              Int                   @id @default(autoincrement())
+  nome            String
+  tipoProjeto     TipoProjeto
+  provinciaId     Int
+  provincia       Provincia             @relation(fields: [provinciaId], references: [id])
+  distritoId      Int?
+  distrito        Distrito?             @relation(fields: [distritoId], references: [id])
+  postoAdmId      Int?
+  postoAdm        PostoAdm?             @relation(fields: [postoAdmId], references: [id])
+  chaveNaMao      Boolean               @default(false)
+  latitude        Float?
+  longitude       Float?
+  estado          EstadoProjeto         @default(EmCurso)
+  valorGlobalMT   Decimal?
+  contratos       Contrato[]
+  marcos          Marco[]
+  relatorios      RelatorioQuinzenal[]
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+}
+
+model Contrato {
+  id               Int                  @id @default(autoincrement())
+  projetoId        Int
+  projeto          Projeto              @relation(fields: [projetoId], references: [id], onDelete: Cascade)
+  tipoContrato     TipoContrato
+  empresa          String
+  valorContratoMT  Decimal?
+  dataInicio       DateTime?
+  dataPrevistaFim  DateTime?
+  chaveNaMao       Boolean              @default(false)
+  relatorios       RelatorioQuinzenal[]
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+}
+
+model Marco {
+  id         Int          @id @default(autoincrement())
+  projetoId  Int
+  projeto    Projeto      @relation(fields: [projetoId], references: [id], onDelete: Cascade)
+  tipo       TipoMarco
+  data       DateTime
+  nota       String?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+}
+
+model RelatorioQuinzenal {
+  id                 Int         @id @default(autoincrement())
+  projetoId          Int
+  projeto            Projeto     @relation(fields: [projetoId], references: [id], onDelete: Cascade)
+  contratoId         Int?
+  contrato           Contrato?   @relation(fields: [contratoId], references: [id], onDelete: SetNull)
+  dataRef            DateTime
+  execFisicaPct      Decimal
+  execFinanceiraPct  Decimal
+  prazo              PrazoStatus
+  risco              String?
+  mitigacao          String?
+  autorUserId        Int
+  autor              Utilizador  @relation(fields: [autorUserId], references: [id])
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+  deletedAt          DateTime?
+
+  @@index([projetoId, dataRef(sort: Desc)])
+  @@index([contratoId, dataRef(sort: Desc)])
+  @@index([projetoId, contratoId, dataRef(sort: Desc)])
+}
+
+model Utilizador {
+  id         Int                   @id @default(autoincrement())
+  nome       String
+  email      String                @unique
+  perfil     Perfil
+  hashSenha  String
+  relatorios RelatorioQuinzenal[]
+  createdAt  DateTime              @default(now())
+  updatedAt  DateTime              @updatedAt
+}
